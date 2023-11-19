@@ -10,6 +10,7 @@ import { ref } from 'vue'
 import FormModal from '@/components/FormModal.vue'
 
 const formModal = ref<InstanceType<typeof FormModal>>()
+
 const handleCreate = () => {
   formModal.value?.openModal()
 }
