@@ -4,5 +4,6 @@ export interface UploadInfoResponse {
   chunkSize: number
   chunkCount: number
   identifier: string
-  partNumbers?: number[]
+  uploadId: string
+  partNumbers: number[]
 }

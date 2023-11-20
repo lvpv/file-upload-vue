@@ -39,9 +39,10 @@
 <script setup lang="ts" name="FileUpload">
 import { ref } from 'vue'
 import { Icon } from '@iconify/vue'
+// @ts-ignore
 import Queue from 'promise-queue-plus'
-// import md5 from '@/utils/md5'
-// import { getUploadInfo } from '@/api/system/file'
+import md5 from '@/utils/md5'
+import { getUploadInfo } from '@/api/system/file'
 import type {
   ElUpload,
   UploadFile,
@@ -174,10 +175,45 @@ const handlerBeforeRemove = (uploadFile: UploadFile, uploadFiles: UploadFiles) =
   console.log('handlerBeforeRemove', uploadFile, uploadFiles)
 }
 
-// const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+
+/**
+ * 更新上传进度
+ * @param increment 为已上传的进度增加的字节量
+ * @param options
+ */
+const updateProcess = (increment: number, options: UploadRequestOptions) => {
+  let uploadedSize = 0 // 已上传的大小
+  const totalSize = options.file.size
+  // increment = Number(increment)
+  const { onProgress } = options
+  let factor = 1000 // 每次增加1000 byte
+  let from = 0
+  // 通过循环一点一点的增加进度
+  while (from <= increment) {
+    from += factor
+    uploadedSize += factor
+    const percent = Number(Math.round((uploadedSize / totalSize) * 100).toFixed(2))
+    onProgress({ percent: percent } as UploadProgressEvent)
+  }
+
+  // const speed = getSpeed()
+  // const remainingTime = speed !== 0 ? Math.ceil((totalSize - uploadedSize) / speed) + 's' : '未知'
+  // console.log('剩余大小：', (totalSize - uploadedSize) / 1024 / 1024, 'mb')
+  // console.log('当前速度：', (speed / 1024 / 1024).toFixed(2), 'mbps')
+  // console.log('预计完成：', remainingTime)
+}
+
 /**
  * 自定义文件上传方法
- * @param options 当前文件选项
+ * 1、获取要上传的文件唯一标识
+ * 2、根据唯一标识获取上传记录
+ * 3.1、如果记录不为空，判断是否已经上传完成，如果上传完成返回地址，并设置进度为100%（结束）
+ * 3.2、如果未上传完成，获取已经上传完成的分片编号，获取每个未上传分片的上传地址
+ * 3.3、如果上传记录为空，则初始化一个上传记录，并根据分片信息获取每个分片的上传地址
+ * 4、根据拿到的上传地址完成分片数据的上传并更新进度
+ * 5、完成文件的合并并返回文件地址（结束）
+ * @param options  文件选项
  * UploadRequestOptions {
  *     action: string;
  *     method: string;
@@ -193,6 +229,43 @@ const handlerBeforeRemove = (uploadFile: UploadFile, uploadFiles: UploadFiles) =
  */
 
 const handlerRequest = async (options: UploadRequestOptions) => {
+  options.onProgress({ percent: 0 } as UploadProgressEvent)
+  let lastUploadedSize: number = 0
+  // const chunkSize: number = 5242880 //字节
+  const totalSize = options.file.size
+  const identifier = await md5(options.file)
+  const info = await getUploadInfo(identifier) //是否成功和已经上传的分片编号
+  if (!info) {
+    return Promise.reject(new Error('文件上传失败'))
+  }
+  if (info.finished && info.path) {
+    // 已经上传完成
+    options.onProgress({ percent: 100 } as UploadProgressEvent)
+    return info.path
+  }
+  const { partNumbers } = info
+  const putNumbers: number[] = []
+  if (partNumbers && partNumbers.length > 0) {
+    // 已经上传完成部分分片
+    const { chunkCount, chunkSize } = info
+    for (let num: number = 1; num <= chunkCount; num++) {
+      if (partNumbers.includes(num)) {
+        lastUploadedSize += chunkSize
+        updateProcess(lastUploadedSize, options)
+      } else {
+        putNumbers.push(num)
+      }
+    }
+  } else {
+    // 没有上传过
+    const chunkSize: number = 5242880 //字节
+    const chunkCount: number = Math.ceil(totalSize / chunkSize)
+    for (let num: number = 1; num <= chunkCount; num++) {
+      putNumbers.push(num)
+    }
+  }
+  await sleep(5000)
+  options.onProgress({ percent: 100 } as UploadProgressEvent)
   /*const file: UploadRawFile = options.file
   const identifier = await md5(file)
   const info = await getUploadInfo(identifier)
