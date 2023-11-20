@@ -28,7 +28,7 @@ http.interceptors.request.use((request: InternalAxiosRequestConfig<any>) => {
 
 /*AxiosResponse<any, any>:第一个泛型是返回数据data的类型,第二个泛型是config的类型*/
 http.interceptors.response.use(
-  async (response: AxiosResponse<IResponse<any>, any>) => {
+  (response: AxiosResponse<IResponse<any>, any>) => {
     const { request, data } = response
     if (request.responseType === 'blob' || request.responseType === 'arraybuffer') {
       return response.data // 返回流数据

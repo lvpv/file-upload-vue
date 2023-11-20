@@ -7,21 +7,21 @@ const DEFAULT_SIZE: number = 10 * 1024 * 1024 // 10MB
  * @param file 文件对象
  * @param chunkSize 分片大小,默认10MB
  */
-const md5 = (file: File, chunkSize = DEFAULT_SIZE): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const startMs = new Date().getTime()
+const md5 = (file: File, chunkSize: number = DEFAULT_SIZE): Promise<string> => {
+  return new Promise((resolve, reject): void => {
+    const startMs: number = new Date().getTime()
     const blobSlice =
       // @ts-ignore
       File.prototype.slice || File.prototype?.mozSlice || File.prototype?.webkitSlice
     // 分片数量
-    const chunks = Math.ceil(file.size / chunkSize)
+    const chunks: number = Math.ceil(file.size / chunkSize)
     // 当前分片数量
-    let currentChunk = 0
+    let currentChunk: number = 0
     //追加数组缓冲区。
-    const spark = new SparkMD5.ArrayBuffer()
+    const spark: SparkMD5.ArrayBuffer = new SparkMD5.ArrayBuffer()
     //读取文件
-    const fileReader = new FileReader()
-    fileReader.onload = function (e: ProgressEvent<FileReader>) {
+    const fileReader: FileReader = new FileReader()
+    fileReader.onload = function (e: ProgressEvent<FileReader>): void {
       spark.append(e.target.result as ArrayBuffer)
       currentChunk++
       if (currentChunk < chunks) {
@@ -29,19 +29,19 @@ const md5 = (file: File, chunkSize = DEFAULT_SIZE): Promise<string> => {
         loadNext()
       } else {
         //完成md5的计算，返回十六进制结果。
-        const md5 = spark.end()
+        const md5: string = spark.end()
         console.log('文件md5计算结束，总耗时：', (new Date().getTime() - startMs) / 1000, 's')
         resolve(md5)
       }
     }
-    fileReader.onerror = function (e: ProgressEvent<FileReader>) {
+    fileReader.onerror = function (e: ProgressEvent<FileReader>): void {
       reject(e.target.error)
     }
 
-    function loadNext() {
+    function loadNext(): void {
       console.log('当前part number：', currentChunk, '总块数：', chunks)
-      const start = currentChunk * chunkSize
-      let end = start + chunkSize
+      const start: number = currentChunk * chunkSize
+      let end: number = start + chunkSize
       if (end > file.size && (end = file.size)) {
         fileReader.readAsArrayBuffer(blobSlice.call(file, start, end))
       }
