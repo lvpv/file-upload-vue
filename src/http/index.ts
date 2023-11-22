@@ -14,7 +14,7 @@ type IResponse<T> = {
 }
 
 const http: AxiosInstance = axios.create({
-  baseURL: 'http://localhost:8088',
+  baseURL: 'http://localhost:8888',
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json'

@@ -30,8 +30,8 @@
   >
     <Icon icon="ep:upload-filled" :height="48" :width="48" />
     <div class="el-upload__text">拖拽文件或者 <em>点击上传文件</em></div>
-    <template #tip v-if="tip">
-      <div class="el-upload__tip">jpg/png files with a size less than 500kb</div>
+    <template #tip>
+      <div class="el-upload__tip" v-if="tip">jpg/png files with a size less than 500kb</div>
     </template>
   </el-upload>
 </template>
@@ -42,7 +42,6 @@ import { Icon } from '@iconify/vue'
 // @ts-ignore
 import Queue from 'promise-queue-plus'
 import md5 from '@/utils/md5'
-import { getUploadInfo } from '@/api/system/file'
 import type {
   ElUpload,
   UploadFile,
@@ -52,6 +51,11 @@ import type {
   UploadProgressEvent,
   UploadRequestOptions
 } from 'element-plus'
+import { getUploadTask } from '@/api/file/upload'
+import { generatePartUploadUrl, getUploadParts, initMultipartUpload } from '@/api/file/file'
+import type { UploadResponse } from '@/api/file/model/Upload'
+import type { PartResponse, UploadPartUrlRequest, InitPartResponse } from '@/api/file/model/File'
+import axios from 'axios'
 
 interface Props {
   title: string
@@ -71,7 +75,7 @@ withDefaults(defineProps<Props>(), {
 
 const uploadRef = ref<InstanceType<typeof ElUpload>>()
 const fileList = ref<UploadUserFile[]>([])
-const uploadQueue = ref<UploadQueue>({} as UploadQueue)
+const uploadQueues = ref<UploadQueue>({} as UploadQueue)
 /**
  * 1、自定义方法顺序
  * 文件上传成功方法顺序：
@@ -175,16 +179,30 @@ const handlerBeforeRemove = (uploadFile: UploadFile, uploadFiles: UploadFiles) =
   console.log('handlerBeforeRemove', uploadFile, uploadFiles)
 }
 
-const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+// const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+
+// 获取从开始上传到现在的平均速度（byte/s）
+const getSpeed = (startTime: number, uploadedSize: number, lastUploadedSize: number) => {
+  // 已上传的总大小 - 上次上传的总大小（断点续传）= 本次上传的总大小（byte）
+  const intervalSize = uploadedSize - lastUploadedSize
+  const nowMs = new Date().getTime()
+  // 时间间隔（s）
+  const intervalTime = (nowMs - startTime) / 1000
+  return intervalSize / intervalTime
+}
 
 /**
  * 更新上传进度
  * @param increment 为已上传的进度增加的字节量
+ * @param uploadedSize 已经上传的大小
  * @param options
  */
-const updateProcess = (increment: number, options: UploadRequestOptions) => {
-  let uploadedSize = 0 // 已上传的大小
-  const totalSize = options.file.size
+const updateProcess = (
+  increment: number,
+  uploadedSize: number,
+  options: UploadRequestOptions
+): number => {
+  const totalSize = options.file.size | 0
   // increment = Number(increment)
   const { onProgress } = options
   let factor = 1000 // 每次增加1000 byte
@@ -196,7 +214,7 @@ const updateProcess = (increment: number, options: UploadRequestOptions) => {
     const percent = Number(Math.round((uploadedSize / totalSize) * 100).toFixed(2))
     onProgress({ percent: percent } as UploadProgressEvent)
   }
-
+  return uploadedSize
   // const speed = getSpeed()
   // const remainingTime = speed !== 0 ? Math.ceil((totalSize - uploadedSize) / speed) + 's' : '未知'
   // console.log('剩余大小：', (totalSize - uploadedSize) / 1024 / 1024, 'mb')
@@ -229,60 +247,96 @@ const updateProcess = (increment: number, options: UploadRequestOptions) => {
  */
 
 const handlerRequest = async (options: UploadRequestOptions) => {
-  options.onProgress({ percent: 0 } as UploadProgressEvent)
-  let lastUploadedSize: number = 0
-  // const chunkSize: number = 5242880 //字节
-  const totalSize = options.file.size
-  const identifier = await md5(options.file)
-  const info = await getUploadInfo(identifier) //是否成功和已经上传的分片编号
-  if (!info) {
-    return Promise.reject(new Error('文件上传失败'))
+  const file = options.file
+  // 初始化参数
+  let lastUploadedSize = 0 // 上次断点续传时上传的总大小
+  let uploadedSize = 0 // 已上传的大小
+  const totalSize = file.size || 0 // 文件总大小
+  let startTime = new Date().getTime() // 开始上传的时间
+  let customChunkSize: number = 5 * 1024 * 1024
+  const uploadRequest: UploadPartUrlRequest = {
+    key: '',
+    uploadId: '',
+    contentType: file.type,
+    partNumbers: []
   }
-  if (info.finished && info.path) {
-    // 已经上传完成
-    options.onProgress({ percent: 100 } as UploadProgressEvent)
-    return info.path
-  }
-  const { partNumbers } = info
-  const putNumbers: number[] = []
-  if (partNumbers && partNumbers.length > 0) {
-    // 已经上传完成部分分片
-    const { chunkCount, chunkSize } = info
-    for (let num: number = 1; num <= chunkCount; num++) {
-      if (partNumbers.includes(num)) {
-        lastUploadedSize += chunkSize
-        updateProcess(lastUploadedSize, options)
-      } else {
-        putNumbers.push(num)
+  // 获取文件MD5
+  const identifier: string = await md5(file)
+  const task: UploadResponse = await getUploadTask(identifier)
+  if (task) {
+    const { key, uploadId, finished, url, chunkCount, chunkSize } = task
+    customChunkSize = chunkSize
+    if (finished && url) {
+      // 已经上传完成
+      options.onProgress({ percent: 100 } as UploadProgressEvent)
+      return url
+    } else {
+      // 获取已经上传的分片列表
+      const notUploadPartNumbers = [] // 未上传的分片编号
+      const parts: PartResponse[] = (await getUploadParts({ key, uploadId })) || []
+      for (let i = 1; i <= chunkCount; i++) {
+        const uploadPart: PartResponse = parts.find((part: PartResponse) => part.partNumber === i)
+        if (uploadPart) {
+          lastUploadedSize += uploadPart.size
+          uploadedSize = updateProcess(uploadPart.size, uploadedSize, options)
+          const speed = getSpeed(startTime, uploadedSize, lastUploadedSize)
+          const remainingTime =
+            speed != 0 ? Math.ceil((totalSize - uploadedSize) / speed) + 's' : '未知'
+          console.log('预计完成：', remainingTime)
+        } else {
+          notUploadPartNumbers.push(i)
+          uploadRequest.partNumbers = notUploadPartNumbers
+        }
       }
     }
   } else {
-    // 没有上传过
-    const chunkSize: number = 5242880 //字节
-    const chunkCount: number = Math.ceil(totalSize / chunkSize)
-    for (let num: number = 1; num <= chunkCount; num++) {
-      putNumbers.push(num)
+    // 未上传过文件
+    const fileName = file.name
+    const initTask: InitPartResponse = await initMultipartUpload({
+      identifier,
+      fileName,
+      totalSize,
+      chunkSize: customChunkSize
+    })
+    const chunkCount: number = initTask.chunkCount
+    const { key, uploadId } = initTask
+    uploadRequest.key = key
+    uploadRequest.uploadId = uploadId
+    const partNumbers = [] // 未上传的分片编号
+    for (let i = 1; i <= chunkCount; i++) {
+      partNumbers.push(i)
     }
+    uploadRequest.partNumbers = partNumbers
   }
-  await sleep(5000)
-  options.onProgress({ percent: 100 } as UploadProgressEvent)
-  /*const file: UploadRawFile = options.file
-  const identifier = await md5(file)
-  const info = await getUploadInfo(identifier)
-  console.log(info)*/
-  /*console.log(identifier)
-  let currentPercent: number = 0
-  const timeId = setInterval(() => {
-    currentPercent = currentPercent + 5
-    // @ts-ignore 设置进度
-    options.onProgress({ percent: currentPercent }) // 会调用自定义的handlerProgress方法
-    console.log(currentPercent)
-  }, 500)
-  await sleep(10000)
-  clearInterval(timeId)
-  // return 'success'
-  return Promise.resolve('success')*/
-  // return Promise.reject(new Error('error')) // 模拟失败
+  const failArr: any[] = []
+  const queue: Queue = Queue(5, {
+    retry: 3, //Number of retries
+    retryIsJump: false, //retry now?
+    workReject: function (reason: any) {
+      failArr.push(reason)
+    },
+    queueEnd: function () {
+      return failArr
+    }
+  })
+  // @ts-ignore
+  uploadQueues.value[file.uid] = queue
+  const urls = await generatePartUploadUrl(uploadRequest)
+  urls.forEach((item) => {
+    const start = customChunkSize * (item.partNumber - 1)
+    const end = start + customChunkSize
+    const blob: Blob = file.slice(start, end)
+    queue.put(() => {
+      axios
+        .put(item.uploadUrl, blob, {
+          headers: { 'Content-Type': 'application/octet-stream' }
+        })
+        .then(() => {
+          uploadedSize = updateProcess(blob.size, uploadedSize, options)
+        })
+    })
+    queue.start()
+  })
 }
 </script>
 <style scoped>

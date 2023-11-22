@@ -10,22 +10,6 @@
     :close-on-press-escape="false"
   >
     <el-scrollbar height="400px" class="p-x-2">
-      <div>
-        <h2>功能测试</h2>
-        <el-button-group>
-          <el-button type="primary" @click="handlerGetInfo">获取用户信息</el-button>
-          <el-button type="success" @click="handlerDownload">获取下载链接</el-button>
-          <el-link
-            type="danger"
-            :href="path"
-            :underline="false"
-            ref="downloadLink"
-            @click="handlerDownload"
-          >
-            下载文件
-          </el-link>
-        </el-button-group>
-      </div>
       <el-form label-position="top" ref="createUserForm" :model="user" :rules="userRules">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="user.username" />
@@ -55,18 +39,15 @@
 <script setup lang="ts" name="FormModal">
 import { reactive, ref } from 'vue'
 import type { FileInfo, User } from '@/api/system/User'
-import type { FormInstance, FormRules, UploadUserFile, ElLink } from 'element-plus'
+import type { FormInstance, FormRules, UploadUserFile } from 'element-plus'
 import FileUploadDrawer from '@/components/FileUploadDrawer.vue'
 import FileUpload from '@/components/FileUpload/FileUpload.vue'
-import { getUserInfo, getDownloadPath } from '@/api/system/file'
 
 const createUserForm = ref<FormInstance>()
 const fileUploadDrawer = ref<InstanceType<typeof FileUploadDrawer>>()
 const fileUpload = ref<InstanceType<typeof FileUpload>>()
-const downloadLink = ref<InstanceType<typeof ElLink>>()
 const dialogVisible = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
-const path = ref<string>('')
 
 const user = ref<User>({
   username: '',
@@ -112,18 +93,6 @@ const openModal = () => {
  * 向父组件暴露方法
  */
 defineExpose({ openModal })
-
-const handlerGetInfo = async () => {
-  const info = await getUserInfo(1)
-  console.log(info)
-}
-
-const handlerDownload = async () => {
-  // const result = await getDownloadPath('2023-11-17/bangong.exe')
-  const result = await getDownloadPath('2023-11-17/background.jpeg')
-  path.value = result.data
-  downloadLink.value.$el.click()
-}
 
 const changeFiles = (files: FileInfo[]) => {
   console.log('FormModal', files)
