@@ -7,8 +7,10 @@ export enum UploadApi {
 }
 
 export const getUploadTaskById = (id: string): Promise<UploadResponse> => {
-  return http.get<UploadResponse>({ url: `${UploadApi.INFO_BY_ID}/${id}` })
+  return http.get<UploadResponse>({ url: `${UploadApi.INFO_BY_ID}?id=${id}` })
 }
 export const getUploadTask = (identifier: string): Promise<UploadResponse> => {
-  return http.get<UploadResponse>({ url: `${UploadApi.INFO_BY_IDENTIFIER}/${identifier}` })
+  return http.get<UploadResponse>({
+    url: `${UploadApi.INFO_BY_IDENTIFIER}?identifier=${identifier}`
+  })
 }

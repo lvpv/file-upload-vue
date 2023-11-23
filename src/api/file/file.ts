@@ -5,14 +5,18 @@ import type {
   ListPartRequest,
   PartResponse,
   UploadPartUrlRequest,
-  UploadPartUrlResponse
+  UploadPartUrlResponse,
+  SinglePartUrlRequest,
+  CompletePartResuest,
+  CompletePartResponse
 } from '@/api/file/model/File'
 
 export enum FileApi {
   LIST_PART = '/file/multipart/list',
   INIT_PART = '/file/multipart/init',
-  UPLOAD_PART_URL = '/file/multipart/init',
-  INFO_BY_IDENTIFIER = '/file/upload/task/identifier'
+  UPLOAD_PART_URL = '/file/multipart/url',
+  SINGLE_PART_URL = '/file/multipart/part/url',
+  COMPLATE_PART = '/file/multipart/complete'
 }
 
 export const getUploadParts = (data: ListPartRequest): Promise<PartResponse[]> => {
@@ -28,6 +32,20 @@ export const generatePartUploadUrl = (
 ): Promise<UploadPartUrlResponse[]> => {
   return http.post<UploadPartUrlResponse[]>({
     url: FileApi.UPLOAD_PART_URL,
+    data
+  })
+}
+export const generateSinglePartUrl = (
+  data: SinglePartUrlRequest
+): Promise<UploadPartUrlResponse> => {
+  return http.post<UploadPartUrlResponse>({
+    url: FileApi.SINGLE_PART_URL,
+    data
+  })
+}
+export const completeMultipart = (data: CompletePartResuest): Promise<CompletePartResponse> => {
+  return http.post<CompletePartResponse>({
+    url: FileApi.COMPLATE_PART,
     data
   })
 }

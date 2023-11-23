@@ -11,7 +11,7 @@
     :with-credentials="false"
     show-file-list
     :drag="true"
-    accept="image/*"
+    accept="*"
     :limit="limit"
     :disabled="false"
     :auto-upload="true"
@@ -40,7 +40,8 @@
 import { ref } from 'vue'
 import { Icon } from '@iconify/vue'
 // @ts-ignore
-import Queue from 'promise-queue-plus'
+// import Queue from 'promise-queue-plus'
+import { handlerUploadTask, handlerUploadPart } from './index'
 import md5 from '@/utils/md5'
 import type {
   ElUpload,
@@ -51,21 +52,13 @@ import type {
   UploadProgressEvent,
   UploadRequestOptions
 } from 'element-plus'
-import { getUploadTask } from '@/api/file/upload'
-import { generatePartUploadUrl, getUploadParts, initMultipartUpload } from '@/api/file/file'
-import type { UploadResponse } from '@/api/file/model/Upload'
-import type { PartResponse, UploadPartUrlRequest, InitPartResponse } from '@/api/file/model/File'
-import axios from 'axios'
+import { getUploadParts, completeMultipart } from '@/api/file/file'
+import type { PartResponse } from '@/api/file/model/File'
 
 interface Props {
   title: string
   limit?: number
   tip?: string
-}
-
-interface UploadQueue {
-  id: number
-  queue: Queue
 }
 
 withDefaults(defineProps<Props>(), {
@@ -75,7 +68,7 @@ withDefaults(defineProps<Props>(), {
 
 const uploadRef = ref<InstanceType<typeof ElUpload>>()
 const fileList = ref<UploadUserFile[]>([])
-const uploadQueues = ref<UploadQueue>({} as UploadQueue)
+// const uploadQueues = ref().value
 /**
  * 1、自定义方法顺序
  * 文件上传成功方法顺序：
@@ -247,96 +240,45 @@ const updateProcess = (
  */
 
 const handlerRequest = async (options: UploadRequestOptions) => {
-  const file = options.file
-  // 初始化参数
-  let lastUploadedSize = 0 // 上次断点续传时上传的总大小
-  let uploadedSize = 0 // 已上传的大小
-  const totalSize = file.size || 0 // 文件总大小
-  let startTime = new Date().getTime() // 开始上传的时间
-  let customChunkSize: number = 5 * 1024 * 1024
-  const uploadRequest: UploadPartUrlRequest = {
-    key: '',
-    uploadId: '',
-    contentType: file.type,
-    partNumbers: []
+  const { file, onProgress } = options
+  const totalSize = file.size | 0
+  onProgress({ percent: 0 } as UploadProgressEvent)
+  const identifier = await md5(file)
+  const uploadParts: number[] = []
+  const task = await handlerUploadTask(identifier, file)
+  if (task && task?.finished) {
+    // 已经上传完成
+    onProgress({ percent: 100 } as UploadProgressEvent)
+    return task.url
   }
-  // 获取文件MD5
-  const identifier: string = await md5(file)
-  const task: UploadResponse = await getUploadTask(identifier)
-  if (task) {
-    const { key, uploadId, finished, url, chunkCount, chunkSize } = task
-    customChunkSize = chunkSize
-    if (finished && url) {
-      // 已经上传完成
-      options.onProgress({ percent: 100 } as UploadProgressEvent)
-      return url
+  // 获取已经上传的分片列表
+  const { key, uploadId, chunkCount, chunkSize } = task
+  let uploadSize = 0
+  const parts: PartResponse[] = (await getUploadParts({ key, uploadId })) || []
+  // 已经上传了部分分片
+  for (let i = 1; i <= chunkCount; i++) {
+    const uploadPart = parts.find((part) => part.partNumber === i)
+    if (uploadPart) {
+      uploadSize += uploadPart.size
+      // 计算进度并更新进度
+      uploadParts.push(uploadPart.partNumber)
+      const percent = Number(Math.round((uploadSize / totalSize) * 100).toFixed(2))
+      onProgress({ percent: percent } as UploadProgressEvent)
     } else {
-      // 获取已经上传的分片列表
-      const notUploadPartNumbers = [] // 未上传的分片编号
-      const parts: PartResponse[] = (await getUploadParts({ key, uploadId })) || []
-      for (let i = 1; i <= chunkCount; i++) {
-        const uploadPart: PartResponse = parts.find((part: PartResponse) => part.partNumber === i)
-        if (uploadPart) {
-          lastUploadedSize += uploadPart.size
-          uploadedSize = updateProcess(uploadPart.size, uploadedSize, options)
-          const speed = getSpeed(startTime, uploadedSize, lastUploadedSize)
-          const remainingTime =
-            speed != 0 ? Math.ceil((totalSize - uploadedSize) / speed) + 's' : '未知'
-          console.log('预计完成：', remainingTime)
-        } else {
-          notUploadPartNumbers.push(i)
-          uploadRequest.partNumbers = notUploadPartNumbers
-        }
-      }
+      // 上传分片
+      const uploadResult = await handlerUploadPart(i, uploadId, file.type, key, chunkSize, file)
+      const { partNumber, size } = uploadResult
+      uploadParts.push(partNumber)
+      uploadSize += size
+      const percent = Number(Math.round((uploadSize / totalSize) * 100).toFixed(2))
+      onProgress({ percent: percent } as UploadProgressEvent)
     }
-  } else {
-    // 未上传过文件
-    const fileName = file.name
-    const initTask: InitPartResponse = await initMultipartUpload({
-      identifier,
-      fileName,
-      totalSize,
-      chunkSize: customChunkSize
-    })
-    const chunkCount: number = initTask.chunkCount
-    const { key, uploadId } = initTask
-    uploadRequest.key = key
-    uploadRequest.uploadId = uploadId
-    const partNumbers = [] // 未上传的分片编号
-    for (let i = 1; i <= chunkCount; i++) {
-      partNumbers.push(i)
-    }
-    uploadRequest.partNumbers = partNumbers
   }
-  const failArr: any[] = []
-  const queue: Queue = Queue(5, {
-    retry: 3, //Number of retries
-    retryIsJump: false, //retry now?
-    workReject: function (reason: any) {
-      failArr.push(reason)
-    },
-    queueEnd: function () {
-      return failArr
-    }
-  })
-  // @ts-ignore
-  uploadQueues.value[file.uid] = queue
-  const urls = await generatePartUploadUrl(uploadRequest)
-  urls.forEach((item) => {
-    const start = customChunkSize * (item.partNumber - 1)
-    const end = start + customChunkSize
-    const blob: Blob = file.slice(start, end)
-    queue.put(() => {
-      axios
-        .put(item.uploadUrl, blob, {
-          headers: { 'Content-Type': 'application/octet-stream' }
-        })
-        .then(() => {
-          uploadedSize = updateProcess(blob.size, uploadedSize, options)
-        })
-    })
-    queue.start()
-  })
+  if (uploadParts.length === chunkCount) {
+    // 已经上传完成,对文件进行合并
+    const completeResonse = await completeMultipart({ key, identifier, uploadId, chunkCount })
+    return completeResonse.url
+  }
 }
 </script>
 <style scoped>

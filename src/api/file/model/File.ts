@@ -3,16 +3,16 @@ export interface ListPartRequest {
   uploadId: string
 }
 
+export interface PartResponse {
+  partNumber: number
+  size: number
+}
+
 export interface InitPartRequest {
   identifier: string
   fileName: string
   totalSize: number
   chunkSize: number
-}
-
-export interface PartResponse {
-  partNumber: number
-  size: number
 }
 
 export interface InitPartResponse {
@@ -35,7 +35,25 @@ export interface UploadPartUrlRequest {
   partNumbers: number[]
 }
 
+export interface SinglePartUrlRequest {
+  key: string
+  contentType: string
+  uploadId: string
+  partNumber: number
+}
+
 export interface UploadPartUrlResponse {
   partNumber: number
   uploadUrl: string
+}
+
+export interface CompletePartResuest {
+  key: string
+  identifier: string
+  uploadId: string
+  chunkCount: number
+}
+
+export interface CompletePartResponse {
+  url: string
 }
