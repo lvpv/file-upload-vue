@@ -27,16 +27,17 @@ export const handlerUploadTask = async (
 export const handlerUploadPart = async (
   partNumber: number,
   uploadId: string,
-  contentType: string,
   key: string,
   chunkSize: number,
   file: File
 ) => {
+  const contentType = file.type || 'application/octet-stream'
+
   const request: SinglePartUrlRequest = {
     key,
     partNumber,
     uploadId,
-    contentType: file.type
+    contentType: contentType
   }
   const response = await generateSinglePartUrl(request)
   const start = chunkSize * (partNumber - 1)

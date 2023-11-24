@@ -266,7 +266,7 @@ const handlerRequest = async (options: UploadRequestOptions) => {
       onProgress({ percent: percent } as UploadProgressEvent)
     } else {
       // 上传分片
-      const uploadResult = await handlerUploadPart(i, uploadId, file.type, key, chunkSize, file)
+      const uploadResult = await handlerUploadPart(i, uploadId, key, chunkSize, file)
       const { partNumber, size } = uploadResult
       uploadParts.push(partNumber)
       uploadSize += size
@@ -276,8 +276,8 @@ const handlerRequest = async (options: UploadRequestOptions) => {
   }
   if (uploadParts.length === chunkCount) {
     // 已经上传完成,对文件进行合并
-    const completeResonse = await completeMultipart({ key, identifier, uploadId, chunkCount })
-    return completeResonse.url
+    const completeResponse = await completeMultipart({ key, identifier, uploadId, chunkCount })
+    return completeResponse.url
   }
 }
 </script>

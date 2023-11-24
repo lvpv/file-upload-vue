@@ -9,7 +9,7 @@
     :close-on-click-modal="false"
     :close-on-press-escape="false"
   >
-    <el-scrollbar height="400px" class="p-x-2">
+    <el-scrollbar height="550px" class="p-x-2">
       <el-form label-position="top" ref="createUserForm" :model="user" :rules="userRules">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="user.username" />
