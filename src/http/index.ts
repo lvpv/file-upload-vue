@@ -47,5 +47,8 @@ export default {
   },
   post: <T = any>(option: AxiosRequestConfig): Promise<T> => {
     return http({ method: 'POST', ...option }) as Promise<T>
+  },
+  delete: <T = any>(option: AxiosRequestConfig): Promise<T> => {
+    return http({ method: 'DELETE', ...option }) as Promise<T>
   }
 }
