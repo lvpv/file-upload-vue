@@ -1,26 +1,45 @@
-import { getUploadTask } from '@/api/file/upload'
-import { initMultipartUpload, generateSinglePartUrl } from '@/api/file/file'
-import type { InitPartRequest } from '@/api/file/model/File'
-import type { UploadResponse } from '@/api/file/model/Upload'
-import type { SinglePartUrlRequest } from '@/api/file/model/File'
 import axios from 'axios'
+import { getFileInfo, initMultipart, generateMultipartUrl } from '@/api/system/file'
+import type {
+  FileInfoResponse,
+  InitMultipartRequest,
+  InitMultipartResponse,
+  MultipartUrlRequest,
+  MultipartUrlResponse
+} from '@/api/system/model/File'
 
-export const handlerUploadTask = async (
+export const handlerFileInfo = async (
   identifier: string,
   file: File
-): Promise<UploadResponse> => {
-  const task = await getUploadTask(identifier)
+): Promise<FileInfoResponse> => {
+  const task = await getFileInfo(identifier)
   if (task && task?.url) {
     return Promise.resolve(task)
   }
   const DEFAULT_SIZE: number = 20 * 1024 * 1024
-  const request: InitPartRequest = {
+  const request: InitMultipartRequest = {
     identifier,
+    type: file.type,
     fileName: file.name,
     totalSize: file.size,
     chunkSize: DEFAULT_SIZE
   }
-  const initTask = await initMultipartUpload(request)
+  const initResponse: InitMultipartResponse = await initMultipart(request)
+  /*
+  * id: number
+  key: string
+  uploadId: string
+  chunkSize: number
+  chunkCount: number*/
+  const { key, uploadId, chunkSize, chunkCount, finished, url } = initResponse
+  const initTask: FileInfoResponse = {
+    key,
+    uploadId,
+    chunkSize,
+    chunkCount,
+    finished,
+    url
+  }
   return Promise.resolve(initTask)
 }
 
@@ -29,22 +48,23 @@ export const handlerUploadPart = async (
   uploadId: string,
   key: string,
   chunkSize: number,
-  file: File
+  file: File,
+  controller: AbortController
 ) => {
   const contentType = file.type || 'application/octet-stream'
 
-  const request: SinglePartUrlRequest = {
+  const request: MultipartUrlRequest = {
     key,
     partNumber,
-    uploadId,
-    contentType: contentType
+    uploadId
   }
-  const response = await generateSinglePartUrl(request)
+  const response: MultipartUrlResponse = await generateMultipartUrl(request, controller)
   const start = chunkSize * (partNumber - 1)
   const end = start + chunkSize
   const filePart = file.slice(start, end)
+  const { uploadUrl } = response
   await axios.request({
-    url: response.uploadUrl,
+    url: uploadUrl,
     method: 'PUT',
     data: filePart,
     headers: { 'Content-Type': contentType }

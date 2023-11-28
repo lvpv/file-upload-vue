@@ -4,7 +4,8 @@ import type {
   InternalAxiosRequestConfig,
   AxiosResponse,
   AxiosError,
-  AxiosRequestConfig
+  AxiosRequestConfig,
+  AxiosRequestHeaders
 } from 'axios'
 
 type IResponse<T> = {
@@ -21,12 +22,15 @@ const http: AxiosInstance = axios.create({
   }
 })
 
-/*InternalAxiosRequestConfig<any>:泛型是请求数据data的类型*/
-http.interceptors.request.use((request: InternalAxiosRequestConfig<any>) => {
-  return request
+/*InternalAxiosRequestConfig<any>  extends AxiosRequestConfig : 多了headers属性泛型是请求数据data的类型*/
+http.interceptors.request.use((config: InternalAxiosRequestConfig<any>) => {
+  const requestConfig = config
+  requestConfig.headers = config.headers || ({} as AxiosRequestHeaders)
+  requestConfig.headers['x-token'] = 'file-upload'
+  return requestConfig
 })
 
-/*AxiosResponse<any, any>:第一个泛型是返回数据data的类型,第二个泛型是config的类型*/
+/*AxiosResponse<any, any>:第一个泛型是返回数据data的类型,第二个泛型是config的类型其实也是请求参数data的类型*/
 http.interceptors.response.use(
   (response: AxiosResponse<IResponse<any>, any>) => {
     const { request, data } = response
@@ -42,11 +46,14 @@ http.interceptors.response.use(
 )
 
 export default {
-  get: <T = any>(option: AxiosRequestConfig): Promise<T> => {
+  get: <T = any>(option: AxiosRequestConfig<any>): Promise<T> => {
     return http({ method: 'GET', ...option }) as Promise<T>
   },
   post: <T = any>(option: AxiosRequestConfig): Promise<T> => {
     return http({ method: 'POST', ...option }) as Promise<T>
+  },
+  put: <T = any>(option: AxiosRequestConfig): Promise<T> => {
+    return http({ method: 'PUT', ...option }) as Promise<T>
   },
   delete: <T = any>(option: AxiosRequestConfig): Promise<T> => {
     return http({ method: 'DELETE', ...option }) as Promise<T>

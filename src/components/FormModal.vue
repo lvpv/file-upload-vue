@@ -11,15 +11,6 @@
   >
     <el-scrollbar height="550px" class="p-x-2">
       <el-form label-position="top" ref="createUserForm" :model="user" :rules="userRules">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="user.username" />
-        </el-form-item>
-        <el-form-item label="年龄" prop="age">
-          <el-input-number v-model="user.age" :controls="true" />
-        </el-form-item>
-        <el-form-item label="头像" prop="files">
-          <el-button @click="handleUpload" type="primary">选择文件</el-button>
-        </el-form-item>
         <el-form-item label="附件" prop="attachments">
           <FileUpload title="请选择附件" ref="fileUpload" @change-files="changeFiles" />
         </el-form-item>
@@ -33,37 +24,26 @@
       </div>
     </template>
   </el-dialog>
-  <FileUploadDrawer title="上传文件" @change-files="changeFiles" ref="fileUploadDrawer" />
+  <!--  <FileUploadDrawer title="上传文件" @change-files="changeFiles" ref="fileUploadDrawer" />-->
 </template>
 
 <script setup lang="ts" name="FormModal">
 import { reactive, ref } from 'vue'
-import type { FileInfo, User } from '@/api/system/User'
-import type { FormInstance, FormRules, UploadUserFile } from 'element-plus'
-import FileUploadDrawer from '@/components/FileUploadDrawer.vue'
+import type { FormInstance, FormRules } from 'element-plus'
+// import FileUploadDrawer from '@/components/FileUploadDrawer.vue'
 import FileUpload from '@/components/FileUpload/FileUpload.vue'
 
 const createUserForm = ref<FormInstance>()
-const fileUploadDrawer = ref<InstanceType<typeof FileUploadDrawer>>()
+// const fileUploadDrawer = ref<InstanceType<typeof FileUploadDrawer>>()
 const fileUpload = ref<InstanceType<typeof FileUpload>>()
 const dialogVisible = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
 
-const user = ref<User>({
-  username: '',
-  age: null,
-  attachments: [],
-  files: [
-    { id: 1, name: 'background.png', path: 'https://www.baidu.com' },
-    {
-      id: 2,
-      name: '精华考点.pdf',
-      path: 'https://www.baidu.com'
-    }
-  ]
+const user = ref<{ attachments: File[] }>({
+  attachments: []
 })
 
-const validatorAge = (_: any, value: number, callback: any) => {
+/*const validatorAge = (_: any, value: number, callback: any) => {
   if (!value) {
     callback(new Error('请输入年龄'))
   } else if (value < 0 || value > 150) {
@@ -71,15 +51,15 @@ const validatorAge = (_: any, value: number, callback: any) => {
   } else {
     callback()
   }
-}
+}*/
 
-const userRules = reactive<FormRules<User>>({
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+const userRules = reactive<FormRules<{ attachments: File[] }>>({
+  /* username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   age: [
     { required: true, message: '请输入年龄', trigger: 'blur' },
     { validator: validatorAge, trigger: 'blur' }
   ],
-  files: [{ required: true, message: '请上传头像', trigger: 'change' }],
+  files: [{ required: true, message: '请上传头像', trigger: 'change' }],*/
   attachments: [{ required: true, message: '请上传附件', trigger: 'change' }]
 })
 
@@ -94,15 +74,15 @@ const openModal = () => {
  */
 defineExpose({ openModal })
 
-const changeFiles = (files: FileInfo[]) => {
+const changeFiles = (files: File[]) => {
   console.log('FormModal', files)
-  user.value.files = files
+  user.value.attachments = files
   console.log(user.value)
 }
 
 /**
  * 上传文件按钮点击事件
- */
+ *!/
 const handleUpload = () => {
   if (user.value.files && user.value.files.length > 0) {
     const files = user.value.files.map((file) => {
@@ -117,7 +97,7 @@ const handleUpload = () => {
   } else {
     fileUploadDrawer.value?.openUploadDrawer([])
   }
-}
+}*/
 /**
  * 重置事件
  */

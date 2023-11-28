@@ -1,12 +1,10 @@
 export interface FileInfoResponse {
-  identifier: string
-  name: string
-  type: string
   key: string
-  url: string
   uploadId: string
   chunkSize: number
   chunkCount: number
+  finished: boolean
+  url: string
 }
 
 export interface InitMultipartRequest {
@@ -18,11 +16,12 @@ export interface InitMultipartRequest {
 }
 
 export interface InitMultipartResponse {
-  id: number
   key: string
   uploadId: string
   chunkSize: number
   chunkCount: number
+  finished: boolean
+  url: string
 }
 
 export interface ListMultipartRequest {
@@ -43,7 +42,7 @@ export interface MultipartUrlRequest {
 
 export interface MultipartUrlResponse {
   partNumber: number
-  uploadId: string
+  uploadUrl: string
 }
 
 export interface CompleteMultipartRequest {
