@@ -14,24 +14,20 @@ export const handlerFileInfo = async (
 ): Promise<FileInfoResponse> => {
   const task = await getFileInfo(identifier)
   if (task && task?.url) {
+    console.log('task', task)
     return Promise.resolve(task)
   }
   const DEFAULT_SIZE: number = 20 * 1024 * 1024
   const request: InitMultipartRequest = {
     identifier,
     type: file.type,
-    fileName: file.name,
+    name: file.name,
     totalSize: file.size,
     chunkSize: DEFAULT_SIZE
   }
   const initResponse: InitMultipartResponse = await initMultipart(request)
-  /*
-  * id: number
-  key: string
-  uploadId: string
-  chunkSize: number
-  chunkCount: number*/
   const { key, uploadId, chunkSize, chunkCount, finished, url } = initResponse
+  console.log(chunkCount)
   const initTask: FileInfoResponse = {
     key,
     uploadId,
@@ -48,8 +44,7 @@ export const handlerUploadPart = async (
   uploadId: string,
   key: string,
   chunkSize: number,
-  file: File,
-  controller: AbortController
+  file: File
 ) => {
   const contentType = file.type || 'application/octet-stream'
 
@@ -58,7 +53,7 @@ export const handlerUploadPart = async (
     partNumber,
     uploadId
   }
-  const response: MultipartUrlResponse = await generateMultipartUrl(request, controller)
+  const response: MultipartUrlResponse = await generateMultipartUrl(request)
   const start = chunkSize * (partNumber - 1)
   const end = start + chunkSize
   const filePart = file.slice(start, end)

@@ -39,8 +39,8 @@ export const listMultipart = (data: ListMultipartRequest) => {
   return http.post<ListMultipartResponse[]>({ url: FILE_API.LIST, data })
 }
 
-export const generateMultipartUrl = (data: MultipartUrlRequest, controller: AbortController) => {
-  return http.post<MultipartUrlResponse>({ url: FILE_API.URL, data, signal: controller.signal })
+export const generateMultipartUrl = (data: MultipartUrlRequest) => {
+  return http.post<MultipartUrlResponse>({ url: FILE_API.URL, data })
 }
 
 export const completeMultipart = (data: CompleteMultipartRequest) => {

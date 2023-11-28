@@ -9,7 +9,7 @@ export interface FileInfoResponse {
 
 export interface InitMultipartRequest {
   identifier: string
-  fileName: string
+  name: string
   type: string
   totalSize: number
   chunkSize: number

@@ -43,12 +43,12 @@ import { Icon } from '@iconify/vue'
 // import Queue from 'promise-queue-plus'
 import { handlerFileInfo, handlerUploadPart } from './index'
 import md5 from '@/utils/md5'
-import PQueue from 'p-queue'
+/*import PQueue from 'p-queue'
 
 type FileQueue = {
   [key: number]: PQueue
 }
-const fileUploadQueue = ref<FileQueue>({}).value
+const fileUploadQueue = ref<FileQueue>({}).value*/
 import type {
   ElUpload,
   UploadFile,
@@ -139,7 +139,7 @@ const handlerProgress = (
   uploadFile: UploadFile,
   uploadFiles: UploadFiles
 ) => {
-  console.log('handlerProgress', evt, uploadFile, uploadFiles)
+  //console.log('handlerProgress', evt, uploadFile, uploadFiles)
 }
 
 /**
@@ -166,12 +166,12 @@ const handlerExceed = (files: File[], uploadFiles: UploadUserFile[]) => {
  */
 const handlerUploadBefore = (rawFile: UploadRawFile) => {
   console.log('before upload', rawFile)
-  const queue = fileUploadQueue[rawFile.uid]
+  /*const queue = fileUploadQueue[rawFile.uid]
   if (queue) {
     queue.pause()
     queue.clear()
     fileUploadQueue[rawFile.uid] = undefined
-  }
+  }*/
 }
 
 /**
@@ -186,14 +186,14 @@ const handlerBeforeRemove = (uploadFile: UploadFile, uploadFiles: UploadFiles) =
 // const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
 
 // 获取从开始上传到现在的平均速度（byte/s）
-const getSpeed = (startTime: number, uploadedSize: number, lastUploadedSize: number) => {
+/*const getSpeed = (startTime: number, uploadedSize: number, lastUploadedSize: number) => {
   // 已上传的总大小 - 上次上传的总大小（断点续传）= 本次上传的总大小（byte）
   const intervalSize = uploadedSize - lastUploadedSize
   const nowMs = new Date().getTime()
   // 时间间隔（s）
   const intervalTime = (nowMs - startTime) / 1000
   return intervalSize / intervalTime
-}
+}*/
 
 /**
  * 更新上传进度
@@ -255,7 +255,7 @@ const handlerRequest = async (options: UploadRequestOptions) => {
   // const totalSize = file.size | 0
   onProgress({ percent: 0 } as UploadProgressEvent)
   const identifier = await md5(file)
-  // const uploadParts: number[] = []
+  const uploadParts: number[] = []
   const task = await handlerFileInfo(identifier, file)
   if (task && task?.finished) {
     // 已经上传完成
@@ -267,46 +267,41 @@ const handlerRequest = async (options: UploadRequestOptions) => {
   let uploadSize = 0
   const parts = (await listMultipart({ key, uploadId })) || []
   // 已经上传了部分分片
-  const queue = new PQueue({ concurrency: 5, autoStart: false })
-  fileUploadQueue[file.uid] = queue
+  /* const queue = new PQueue({ concurrency: 5, autoStart: false })
+   fileUploadQueue[file.uid] = queue*/
   // const controller = new AbortController();
   for (let i = 1; i <= chunkCount; i++) {
     const uploadPart = parts.find((part) => part.partNumber === i)
     if (uploadPart) {
       uploadSize += uploadPart.size
       // 计算进度并更新进度
-      // uploadParts.push(uploadPart.partNumber)
+      uploadParts.push(uploadPart.partNumber)
       /*const percent = Number(Math.round((uploadSize / totalSize) * 100).toFixed(2))
       onProgress({ percent: percent } as UploadProgressEvent)*/
       uploadSize = updateProcess(uploadPart.size, uploadSize, options)
     } else {
       // 上传分片
-      const controller = new AbortController()
-      await queue.add(
-        async ({ signal }) => {
-          const uploadResult = await handlerUploadPart(
-            i,
-            uploadId,
-            key,
-            chunkSize,
-            file,
-            controller
-          )
-          const { size } = uploadResult
-          uploadSize = updateProcess(size, uploadSize, options)
-          signal.addEventListener('abort', () => {
-            console.log('分片编号', i)
-            controller.abort()
-          })
-        },
-        { signal: controller.signal }
-      )
+      const uploadResult = await handlerUploadPart(i, uploadId, key, chunkSize, file)
+      const { size, partNumber } = uploadResult
+      uploadParts.push(partNumber)
+      uploadSize = updateProcess(size, uploadSize, options)
+      /*      const controller = new AbortController()
+            await queue.add(
+              async ({ signal }) => {
+      
+                signal.addEventListener('abort', () => {
+                  console.log('分片编号', i)
+                  controller.abort()
+                })
+              },
+              { signal: controller.signal }
+            )*/
     }
   }
-  queue.onIdle().then(async () => {
-    const completeResponse = await completeMultipart({ key, identifier, uploadId, chunkCount })
-    return completeResponse.url
-  })
+  if (uploadParts.length === chunkCount) {
+    const response = await completeMultipart({ uploadId, key, identifier, chunkCount })
+    return response.url
+  }
   // queue.start()
 }
 </script>
